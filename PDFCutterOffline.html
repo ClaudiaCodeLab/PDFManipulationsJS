@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PDF Cutter</title>
+  <script src="./js/pdf-lib.min.js"></script>
+  <script src="./js/download.js"></script>
+  <style>
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: white;
+    }
+    
+    h1 {
+      text-align: center;
+      color: #5060F7;
+    }
+    
+    .drop-area {
+      border: 2px dashed #5060F7;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .drop-area.highlight {
+      border-color: #999;
+    }
+    
+    .file-input {
+      display: none;
+    }
+    
+    .page-input {
+      margin-bottom: 10px;
+    }
+    
+    button {
+      display: block;
+      margin: 20px auto;
+      background-color: #5060F7;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    
+    .file-info {
+      margin-bottom: 10px;
+    }
+    
+    .remove-file {
+      color: #5060F7;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>PDF Cutter</h1>
+  
+  <div class="drop-area" id="drop-area">
+    <p>Drag a PDF file here</p>
+    <p>Or</p>
+    <button onclick="document.getElementById('pdf-file').click()">choose your file</button>
+    <input type="file" accept="application/pdf" id="pdf-file" class="file-input">
+  </div>
+  
+  <div class="file-info" id="file-info" style="display: none;">
+    <span id="file-name"></span>
+    <span class="remove-file" onclick="removeFile()">(Remove)</span>
+  </div>
+  
+  <div class="page-input">
+    <label for="start-page">Start Page:</label>
+    <input type="number" id="start-page" min="1" value="1">
+  </div>
+  
+  <div class="page-input">
+    <label for="end-page">End Page:</label>
+    <input type="number" id="end-page" min="1" value="1">
+  </div>
+  
+  <button onclick="cutPDF()">Cut PDF</button>
+  
+  <script>
+    const { PDFDocument } = PDFLib;
+    
+    async function cutPDF() {
+      const file = document.getElementById('pdf-file').files[0];
+      const pdfDoc = await PDFDocument.load(await file.arrayBuffer());
+      
+      const startPage = parseInt(document.getElementById('start-page').value);
+      const endPage = parseInt(document.getElementById('end-page').value);
+      
+      // Create a new PDF document
+      const newPdfDoc = await PDFDocument.create();
+      
+      // Copy the desired pages from the source document to the new document
+      const copiedPages = await newPdfDoc.copyPages(pdfDoc, pdfDoc.getPageIndices().slice(startPage - 1, endPage));
+      copiedPages.forEach(page => newPdfDoc.addPage(page));
+      
+      // Save the new PDF document
+      const pdfBytes = await newPdfDoc.save();
+      download(pdfBytes, "cut.pdf", "application/pdf");
+    }
+    
+    const dropArea = document.getElementById('drop-area');
+    const fileInfo = document.getElementById('file-info');
+    const fileName = document.getElementById('file-name');
+    
+    dropArea.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      dropArea.classList.add('highlight');
+    });
+    
+    dropArea.addEventListener('dragleave', () => {
+      dropArea.classList.remove('highlight');
+    });
+    
+    dropArea.addEventListener('drop', (event) => {
+      event.preventDefault();
+      dropArea.classList.remove('highlight');
+      
+      const file = event.dataTransfer.files[0];
+      document.getElementById('pdf-file').files = event.dataTransfer.files;
+      showFileInfo(file.name);
+    });
+    
+    document.getElementById('pdf-file').addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      showFileInfo(file.name);
+    });
+    
+    function showFileInfo(name) {
+      fileName.textContent = name;
+      fileInfo.style.display = 'block';
+    }
+    
+    function removeFile() {
+      document.getElementById('pdf-file').value = '';
+      fileInfo.style.display = 'none';
+    }
+  </script>
+</body>
+</html>
