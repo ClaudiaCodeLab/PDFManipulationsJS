@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Merge</title>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+    <style>
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            background-color: #ffffff;
+            color: #333;
+            padding: 20px;
+        }
+        h1 {
+            color: #5060F7;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .drag-drop-area {
+            border: 2px dashed #5060F7;
+            border-radius: 5px;
+            padding: 40px;
+            background-color: #f0f4ff;
+            cursor: pointer;
+            position: relative;
+            color: #333;
+        }
+        .drag-drop-area:hover {
+            background-color: #e0e6ff;
+        }
+        .drag-drop-area p {
+            margin: 0;
+            font-size: 18px;
+        }
+        .drag-drop-area img {
+            display: block;
+            margin: 0 auto 10px;
+        }
+        .file-list {
+            list-style: none;
+            padding: 0;
+            border: 2px solid #5060F7;
+            border-radius: 5px;
+            min-height: 150px;
+            padding: 10px;
+            margin-top: 15px;
+        }
+        .file-item {
+            background-color: #f0f4ff;
+            margin: 5px 0;
+            padding: 10px;
+            border: 1px solid #5060F7;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-item span {
+            cursor: pointer;
+            color: red;
+            font-weight: bold;
+        }
+        .file-item span:hover {
+            color: darkred;
+        }
+        button {
+            background-color: #5060F7;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #404ecb;
+        }
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PDF Merge</h1>
+        
+        <div id="dragDropArea" class="drag-drop-area" onclick="document.getElementById('pdfInput').click()">           
+            <p>Drag files here to add them</p>
+            <p>Or <span style="color: #5060F7; text-decoration: underline; cursor: pointer;">choose your files</span></p>
+        </div>
+        
+        <input type="file" id="pdfInput" multiple accept=".pdf" onchange="handleFileSelect()">
+        <ul id="fileList" class="file-list">
+            <li class="placeholder">Drag files here to reorder</li>
+        </ul>
+        <button onclick="mergePDFs()">Merge PDFs</button>
+    </div>
+
+    <script>
+        let fileObjects = [];
+
+        // Initialize sortable list
+        const fileList = document.getElementById('fileList');
+        new Sortable(fileList, {
+            animation: 150,
+            onEnd: reorderFiles
+        });
+
+        // Drag and Drop handling
+        const dragDropArea = document.getElementById('dragDropArea');
+        dragDropArea.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dragDropArea.style.backgroundColor = '#e0e6ff';  // Change background on drag over
+        });
+
+        dragDropArea.addEventListener('dragleave', () => {
+            dragDropArea.style.backgroundColor = '#f0f4ff';  // Reset background on drag leave
+        });
+
+        dragDropArea.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dragDropArea.style.backgroundColor = '#f0f4ff';  // Reset background on drop
+            const files = event.dataTransfer.files;
+            handleDroppedFiles(files);
+        });
+
+        // Handle file input selection
+        function handleFileSelect() {
+            const files = document.getElementById('pdfInput').files;
+            handleDroppedFiles(files);
+        }
+
+        // Handle dropped files (both drag-drop and file selection)
+        function handleDroppedFiles(files) {
+            fileObjects = [...fileObjects, ...Array.from(files)];
+            renderFileList();
+        }
+
+        // Reorder files in fileObjects based on new order in the list
+        function reorderFiles(evt) {
+            const movedItem = fileObjects.splice(evt.oldIndex, 1)[0];
+            fileObjects.splice(evt.newIndex, 0, movedItem);
+        }
+
+        // Remove a file from the list
+        function removeFile(index) {
+            fileObjects.splice(index, 1);
+            renderFileList();
+        }
+
+        // Render file names in the sortable list
+        function renderFileList() {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = ''; // Clear existing list
+            fileObjects.forEach((file, index) => {
+                const li = document.createElement('li');
+                li.className = 'file-item';
+                li.innerHTML = `${file.name} <span onclick="removeFile(${index})">X</span>`;
+                fileList.appendChild(li);
+            });
+
+            if (fileObjects.length === 0) {
+                fileList.innerHTML = '<li class="placeholder">Drag files here to reorder</li>';
+            }
+        }
+
+        // Merge PDFs based on file order
+        async function mergePDFs() {
+            if (fileObjects.length < 2) {
+                alert('Please select at least two PDF files to merge.');
+                return;
+            }
+
+            const pdfDoc = await PDFLib.PDFDocument.create();
+
+            for (let file of fileObjects) {
+                const pdfBytes = await file.arrayBuffer();
+                try {
+                    const pdf = await PDFLib.PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+                    const copiedPages = await pdfDoc.copyPages(pdf, pdf.getPageIndices());
+                    copiedPages.forEach((page) => pdfDoc.addPage(page));
+                } catch (error) {
+                    console.error(`Error processing file ${file.name}:`, error);
+                    alert(`Error processing file ${file.name}. It may be encrypted or damaged.`);
+                }
+            }
+
+            if (pdfDoc.getPageCount() > 0) {
+                const pdfBytes = await pdfDoc.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'merged.pdf';
+                link.click();
+            } else {
+                alert('No valid pages were found to merge.');
+            }
+        }
+    </script>
+</body>
+</html>
